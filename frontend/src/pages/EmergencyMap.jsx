@@ -62,7 +62,7 @@ export default function EmergencyMap() {
   const fetchHospitals = useCallback(async (lat, lng) => {
     try {
       const res = await axios.get(
-        `http://localhost:5000/api/maps/nearby?lat=${lat}&lng=${lng}`,
+        `${API_BASE_URL}/api/maps/nearby?lat=${lat}&lng=${lng}`,
       );
       const data = res.data.hospitals || res.data;
       setHospitals(Array.isArray(data) ? data : []);
@@ -78,7 +78,7 @@ export default function EmergencyMap() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.get(
-        "http://localhost:5000/api/dispatch/my-active",
+        "${API_BASE_URL}/api/dispatch/my-active",
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -124,7 +124,7 @@ export default function EmergencyMap() {
 
   // 2. Connect to Real-Time Socket.io Server
   useEffect(() => {
-    const socket = io("http://localhost:5000", {
+    const socket = io("${API_BASE_URL}", {
       transports: ["websocket", "polling"],
     });
 
@@ -246,7 +246,7 @@ export default function EmergencyMap() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.post(
-        "http://localhost:5000/api/dispatch/sos",
+        "${API_BASE_URL}/api/dispatch/sos",
         {
           lat: userLocation.lat,
           lng: userLocation.lng,
@@ -272,7 +272,7 @@ export default function EmergencyMap() {
     try {
       const token = await currentUser.getIdToken();
       await axios.patch(
-        `http://localhost:5000/api/dispatch/${activeDispatch._id}/resolve`,
+        `${API_BASE_URL}/api/dispatch/${activeDispatch._id}/resolve`,
         { status: "cancelled" },
         { headers: { Authorization: `Bearer ${token}` } },
       );

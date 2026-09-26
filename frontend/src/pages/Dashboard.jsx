@@ -21,12 +21,12 @@ export default function Dashboard() {
         const headers = { Authorization: `Bearer ${token}` };
 
         const [profRes, appRes, sosRes, ehrRes] = await Promise.allSettled([
-          axios.get("http://localhost:5000/api/auth/profile", { headers }),
-          axios.get("http://localhost:5000/api/appointments/my", { headers }),
-          axios.get("http://localhost:5000/api/dispatch/my-active", {
+          axios.get("${API_BASE_URL}/api/auth/profile", { headers }),
+          axios.get("${API_BASE_URL}/api/appointments/my", { headers }),
+          axios.get("${API_BASE_URL}/api/dispatch/my-active", {
             headers,
           }),
-          axios.get("http://localhost:5000/api/ehr/my-records", { headers }),
+          axios.get("${API_BASE_URL}/api/ehr/my-records", { headers }),
         ]);
 
         if (!isMounted) return;

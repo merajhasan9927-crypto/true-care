@@ -48,9 +48,9 @@ export default function AdminDashboard() {
       const headers = { Authorization: `Bearer ${token}` };
 
       const [appRes, statsRes, dispatchRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/appointments", { headers }),
-        axios.get("http://localhost:5000/api/admin/stats", { headers }),
-        axios.get("http://localhost:5000/api/dispatch/active", { headers }),
+        axios.get("${API_BASE_URL}/api/appointments", { headers }),
+        axios.get("${API_BASE_URL}/api/admin/stats", { headers }),
+        axios.get("${API_BASE_URL}/api/dispatch/active", { headers }),
       ]);
 
       setAppointments(appRes.data.appointments || appRes.data || []);
@@ -77,7 +77,7 @@ export default function AdminDashboard() {
 
   // 2. Real-Time Socket.io Subscription
   useEffect(() => {
-    const socket = io("http://localhost:5000", {
+    const socket = io("${API_BASE_URL}", {
       transports: ["websocket", "polling"],
     });
 
@@ -111,7 +111,7 @@ export default function AdminDashboard() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.patch(
-        "http://localhost:5000/api/admin/beds",
+        "${API_BASE_URL}/api/admin/beds",
         {
           erBedsAvailable: updatedCount,
           hospitalName: "City Central Emergency Hospital",
@@ -136,7 +136,7 @@ export default function AdminDashboard() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.post(
-        "http://localhost:5000/api/admin/admit",
+        "${API_BASE_URL}/api/admin/admit",
         { patientName, patientEmail, conditionSeverity, bedNumber },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -158,7 +158,7 @@ export default function AdminDashboard() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.patch(
-        `http://localhost:5000/api/admin/discharge/${id}`,
+        `${API_BASE_URL}/api/admin/discharge/${id}`,
         {},
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -173,7 +173,7 @@ export default function AdminDashboard() {
     try {
       const token = await currentUser.getIdToken();
       await axios.patch(
-        `http://localhost:5000/api/appointments/${id}/status`,
+        `${API_BASE_URL}/api/appointments/${id}/status`,
         { status },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -214,7 +214,7 @@ export default function AdminDashboard() {
       const filteredMeds = meds.filter(m => m.name.trim() !== "");
 
       const res = await axios.post(
-        `http://localhost:5000/api/appointments/${activePrescribeApp._id}/prescribe`,
+        `${API_BASE_URL}/api/appointments/${activePrescribeApp._id}/prescribe`,
         {
           diagnosisSummary: rxDiagnosis,
           doctorAdvice: rxAdvice,
@@ -253,7 +253,7 @@ export default function AdminDashboard() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.patch(
-        `http://localhost:5000/api/dispatch/${activeDeploy._id}/deploy`,
+        `${API_BASE_URL}/api/dispatch/${activeDeploy._id}/deploy`,
         {
           ambulanceUnit,
           driverContact,
@@ -276,7 +276,7 @@ export default function AdminDashboard() {
     try {
       const token = await currentUser.getIdToken();
       await axios.patch(
-        `http://localhost:5000/api/dispatch/${id}/resolve`,
+        `${API_BASE_URL}/api/dispatch/${id}/resolve`,
         { status: "resolved" },
         { headers: { Authorization: `Bearer ${token}` } },
       );

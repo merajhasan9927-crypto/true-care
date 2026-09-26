@@ -49,7 +49,7 @@ export default function Appointments() {
     currentUser
       .getIdToken()
       .then(token =>
-        axios.get("http://localhost:5000/api/appointments/my", {
+        axios.get("${API_BASE_URL}/api/appointments/my", {
           headers: { Authorization: `Bearer ${token}` },
         }),
       )
@@ -183,7 +183,7 @@ export default function Appointments() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.post(
-        "http://localhost:5000/api/appointments",
+        "${API_BASE_URL}/api/appointments",
         {
           doctorName: chosenDoc.name,
           specialty: chosenDoc.specialty,

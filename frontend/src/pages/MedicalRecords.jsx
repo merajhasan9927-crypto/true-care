@@ -22,7 +22,7 @@ export default function MedicalRecords() {
       try {
         const token = await currentUser.getIdToken();
         const res = await axios.get(
-          "http://localhost:5000/api/ehr/my-records",
+          "${API_BASE_URL}/api/ehr/my-records",
           {
             headers: { Authorization: `Bearer ${token}` },
           },

@@ -44,7 +44,7 @@ export default function Profile() {
 
       try {
         const token = await currentUser.getIdToken();
-        const res = await axios.get("http://localhost:5000/api/auth/profile", {
+        const res = await axios.get("${API_BASE_URL}/api/auth/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
         const u = res.data.user;
@@ -103,7 +103,7 @@ export default function Profile() {
       };
 
       const res = await axios.put(
-        "http://localhost:5000/api/auth/profile",
+        "${API_BASE_URL}/api/auth/profile",
         payload,
         {
           headers: { Authorization: `Bearer ${token}` },
