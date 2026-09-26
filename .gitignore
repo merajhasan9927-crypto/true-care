@@ -1,0 +1,22 @@
+# Ignore heavy node_modules folders
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Ignore build folders
+dist/
+frontend/dist/
+
+# Ignore secret keys so GitHub Push Protection does not block your upload
+.env
+.env.*
+backend/.env
+frontend/.env
+firebase-service-account.json
+backend/firebase-service-account.json
+*service-account*.json
+
+# Logs & OS files
+npm-debug.log*
+.DS_Store
+Thumbs.db
