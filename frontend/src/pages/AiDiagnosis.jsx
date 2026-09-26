@@ -17,7 +17,7 @@ export default function AiDiagnosis() {
     if (!currentUser) return;
     try {
       const token = await currentUser.getIdToken();
-      const res = await axios.get("${API_BASE_URL}/api/ai/history", {
+      const res = await axios.get("https://true-care-production.up.railway.app/api/ai/history", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setHistory(res.data.history || []);
@@ -53,7 +53,7 @@ export default function AiDiagnosis() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.post(
-        "${API_BASE_URL}/api/ai/diagnose",
+        "https://true-care-production.up.railway.app/api/ai/diagnose",
         { symptoms: symptomsList },
         { headers: { Authorization: `Bearer ${token}` } },
       );

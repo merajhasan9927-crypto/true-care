@@ -27,7 +27,7 @@ export function AuthProvider({ children }) {
     try {
       const token = await cred.user.getIdToken();
       const res = await axios.put(
-        "${API_BASE_URL}/api/auth/profile",
+        "https://true-care-production.up.railway.app/api/auth/profile",
         {
           name: additionalData.name || "",
           role: chosenRole,
@@ -76,7 +76,7 @@ export function AuthProvider({ children }) {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.put(
-        "${API_BASE_URL}/api/auth/profile",
+        "https://true-care-production.up.railway.app/api/auth/profile",
         { role: newRole },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -105,7 +105,7 @@ export function AuthProvider({ children }) {
         try {
           const token = await user.getIdToken();
           const res = await axios.get(
-            "${API_BASE_URL}/api/auth/profile",
+            "https://true-care-production.up.railway.app/api/auth/profile",
             {
               headers: { Authorization: `Bearer ${token}` },
             },
@@ -117,7 +117,7 @@ export function AuthProvider({ children }) {
           if (savedLocalRole && fetchedUser.role !== savedLocalRole) {
             axios
               .put(
-                "${API_BASE_URL}/api/auth/profile",
+                "https://true-care-production.up.railway.app/api/auth/profile",
                 { role: savedLocalRole },
                 { headers: { Authorization: `Bearer ${token}` } },
               )

@@ -22,7 +22,7 @@ export default function MedicalRecords() {
       try {
         const token = await currentUser.getIdToken();
         const res = await axios.get(
-          "${API_BASE_URL}/api/ehr/my-records",
+          "https://true-care-production.up.railway.app/api/ehr/my-records",
           {
             headers: { Authorization: `Bearer ${token}` },
           },

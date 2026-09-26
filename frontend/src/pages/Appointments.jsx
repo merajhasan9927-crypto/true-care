@@ -49,7 +49,7 @@ export default function Appointments() {
     currentUser
       .getIdToken()
       .then(token =>
-        axios.get("${API_BASE_URL}/api/appointments/my", {
+        axios.get("https://true-care-production.up.railway.app/api/appointments/my", {
           headers: { Authorization: `Bearer ${token}` },
         }),
       )
@@ -183,7 +183,7 @@ export default function Appointments() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.post(
-        "${API_BASE_URL}/api/appointments",
+        "https://true-care-production.up.railway.app/api/appointments",
         {
           doctorName: chosenDoc.name,
           specialty: chosenDoc.specialty,

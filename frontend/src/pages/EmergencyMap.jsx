@@ -62,7 +62,7 @@ export default function EmergencyMap() {
   const fetchHospitals = useCallback(async (lat, lng) => {
     try {
       const res = await axios.get(
-        `${API_BASE_URL}/api/maps/nearby?lat=${lat}&lng=${lng}`,
+        `https://true-care-production.up.railway.app/api/maps/nearby?lat=${lat}&lng=${lng}`,
       );
       const data = res.data.hospitals || res.data;
       setHospitals(Array.isArray(data) ? data : []);
@@ -78,7 +78,7 @@ export default function EmergencyMap() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.get(
-        "${API_BASE_URL}/api/dispatch/my-active",
+        "https://true-care-production.up.railway.app/api/dispatch/my-active",
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -124,7 +124,7 @@ export default function EmergencyMap() {
 
   // 2. Connect to Real-Time Socket.io Server
   useEffect(() => {
-    const socket = io("${API_BASE_URL}", {
+    const socket = io("https://true-care-production.up.railway.app", {
       transports: ["websocket", "polling"],
     });
 
@@ -246,7 +246,7 @@ export default function EmergencyMap() {
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.post(
-        "${API_BASE_URL}/api/dispatch/sos",
+        "https://true-care-production.up.railway.app/api/dispatch/sos",
         {
           lat: userLocation.lat,
           lng: userLocation.lng,
@@ -272,7 +272,7 @@ export default function EmergencyMap() {
     try {
       const token = await currentUser.getIdToken();
       await axios.patch(
-        `${API_BASE_URL}/api/dispatch/${activeDispatch._id}/resolve`,
+        `https://true-care-production.up.railway.app/api/dispatch/${activeDispatch._id}/resolve`,
         { status: "cancelled" },
         { headers: { Authorization: `Bearer ${token}` } },
       );
