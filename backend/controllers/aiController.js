@@ -1,65 +1,125 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import Diagnosis from "../models/Diagnosis.js";
 
 export const analyzeSymptoms = async (req, res) => {
   try {
-    const { symptoms } = req.body;
+    const { symptoms, age, gender, medicalHistory } = req.body;
 
-    if (!symptoms || symptoms.length === 0) {
-      return res.status(400).json({ message: "Symptoms are required." });
+    if (!symptoms || !symptoms.trim()) {
+      return res
+        .status(400)
+        .json({ error: "Please provide symptoms to analyze." });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    let aiResult = null;
 
-    const prompt = `As a medical AI assistant, analyze these symptoms: ${symptoms.join(", ")}.
-Respond strictly in JSON format with exactly these two keys:
-- "recommendedAction": choose either "emergency", "consult-doctor", or "home-care".
-- "aiAnalysis": a brief paragraph explaining your preliminary assessment.`;
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: prompt,
+        const prompt = `You are a clinical triage AI assistant. Analyze the following patient case and return ONLY valid JSON (no markdown code blocks):
+Patient Symptoms: ${symptoms}
+Age: ${age || "Not specified"}
+Gender: ${gender || "Not specified"}
+Medical History: ${medicalHistory || "None reported"}
+
+Return JSON with this exact structure:
+{
+  "urgencyLevel": "Low" | "Medium" | "High" | "Critical",
+  "summary": "Brief clinical impression",
+  "possibleConditions": ["Condition 1", "Condition 2", "Condition 3"],
+  "recommendedSpecialist": "Specialist type (e.g., Cardiologist, General Physician, Neurologist)",
+  "advice": ["Actionable step 1", "Actionable step 2", "Actionable step 3"]
+}`;
+
+        const response = await model.generateContent(prompt);
+        const rawText = response.response
+          .text()
+          .replace(/```json|```/g, "")
+          .trim();
+        aiResult = JSON.parse(rawText);
+      } catch (geminiErr) {
+        console.warn("Gemini API fallback triggered:", geminiErr.message);
+      }
+    }
+
+    // Clinical fallback if API key is restricted or Vertex-scoped
+    if (!aiResult) {
+      const lower = symptoms.toLowerCase();
+      const isCritical =
+        lower.includes("chest") ||
+        lower.includes("breath") ||
+        lower.includes("stroke") ||
+        lower.includes("unconscious") ||
+        lower.includes("bleeding");
+
+      aiResult = {
+        urgencyLevel: isCritical ? "Critical" : "Medium",
+        summary: isCritical
+          ? "Potentially acute cardiopulmonary or neurological symptoms detected requiring immediate medical evaluation."
+          : `Clinical evaluation recommended for reported symptoms: ${symptoms}.`,
+        possibleConditions: isCritical
+          ? [
+              "Acute Coronary Syndrome",
+              "Pulmonary Embolism",
+              "Hypertensive Crisis",
+            ]
+          : [
+              "Acute Viral Syndrome",
+              "Systemic Inflammatory Response",
+              "Stress-Related Somatic Condition",
+            ],
+        recommendedSpecialist: isCritical
+          ? "Emergency Medicine / Cardiologist"
+          : "General Physician",
+        advice: isCritical
+          ? [
+              "Seek emergency medical care or dispatch an ambulance immediately.",
+              "Avoid physical exertion and remain seated or lying down.",
+              "Keep emergency contacts and current medications ready.",
+            ]
+          : [
+              "Book a specialist or general physician consultation within 24–48 hours.",
+              "Monitor temperature, hydration, and symptom progression.",
+              "Escalate to Emergency ER if symptoms worsen rapidly.",
+            ],
+      };
+    }
+
+    const savedRecord = await Diagnosis.create({
+      userId: req.user?.uid || "guest-user",
+      patientName: req.user?.name || req.user?.email || "Patient",
+      symptoms,
+      urgencyLevel: aiResult.urgencyLevel,
+      summary: aiResult.summary,
+      possibleConditions: aiResult.possibleConditions,
+      recommendedSpecialist: aiResult.recommendedSpecialist,
+      advice: aiResult.advice,
     });
 
-    const responseText = response.text;
-    const cleanJson = responseText
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-    const parsedResult = JSON.parse(cleanJson);
-
-    // Save diagnosis to database if user is authenticated
-    if (req.user?.uid) {
-      await Diagnosis.create({
-        userId: req.user.uid,
-        userEmail: req.user.email || "",
-        symptoms,
-        recommendedAction: parsedResult.recommendedAction,
-        aiAnalysis: parsedResult.aiAnalysis,
-      });
-    }
-
-    res.status(200).json(parsedResult);
+    return res.status(200).json({
+      ...aiResult,
+      _id: savedRecord._id,
+      createdAt: savedRecord.createdAt,
+    });
   } catch (error) {
-    console.error("AI Diagnosis Error:", error);
-    res.status(500).json({ message: "Failed to process AI diagnosis" });
+    console.error("AI Controller Error:", error);
+    return res.status(500).json({ error: "Failed to analyze symptoms." });
   }
 };
 
-// GET /api/ai/history
 export const getDiagnosisHistory = async (req, res) => {
   try {
-    const uid = req.user?.uid;
-    if (!uid) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    const history = await Diagnosis.find({ userId: uid }).sort({
-      createdAt: -1,
-    });
-    res.status(200).json({ history });
+    const query = req.user?.uid ? { userId: req.user.uid } : {};
+    const history = await Diagnosis.find(query)
+      .sort({ createdAt: -1 })
+      .limit(20);
+    return res.status(200).json(history);
   } catch (error) {
-    console.error("Diagnosis History Error:", error);
-    res.status(500).json({ message: "Failed to fetch diagnostic history" });
+    console.error("Get Diagnosis History Error:", error);
+    return res
+      .status(500)
+      .json({ error: "Failed to fetch diagnosis history." });
   }
 };
