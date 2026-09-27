@@ -14,13 +14,42 @@ export default function AiDiagnosis() {
 
   // Fetch past diagnosis records
   const fetchHistory = async () => {
+    const storageKey = "tc_diagnosis_history";
+    const savedLocal = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    if (savedLocal.length > 0) {
+      setHistory(savedLocal);
+    }
     if (!currentUser) return;
+    if (savedLocal.length === 0) setHistoryLoading(true);
     try {
       const token = await currentUser.getIdToken();
       const res = await axios.get("https://true-care-production.up.railway.app/api/ai/history", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setHistory(res.data.history || []);
+      const rawServer = Array.isArray(res.data) ? res.data : (res.data?.history || []);
+      const cleanServer = rawServer.map((r, idx) => ({
+        _id: String(r?._id || r?.id || "srv-" + idx),
+        symptoms: Array.isArray(r?.symptoms)
+          ? r.symptoms.map(String)
+          : typeof r?.symptoms === "string"
+          ? r.symptoms.split(",").map(s => s.trim()).filter(Boolean)
+          : ["Reported symptoms"],
+        recommendedAction: ["emergency", "consult-doctor", "home-care"].includes(r?.recommendedAction)
+          ? r.recommendedAction
+          : "consult-doctor",
+        aiAnalysis: String(r?.aiAnalysis || r?.summary || "Clinical triage completed."),
+        createdAt: r?.createdAt || new Date().toISOString(),
+      }));
+      const currentLocal = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      const combined = [...currentLocal, ...cleanServer];
+      const unique = combined.filter(
+        (item, index, arr) =>
+          arr.findIndex(
+            t => t._id === item._id || (t.aiAnalysis === item.aiAnalysis && t.createdAt === item.createdAt)
+          ) === index
+      );
+      localStorage.setItem(storageKey, JSON.stringify(unique));
+      setHistory(unique);
     } catch (err) {
       console.error("Failed to load diagnosis history:", err);
     } finally {
@@ -58,20 +87,27 @@ export default function AiDiagnosis() {
         { headers: { Authorization: `Bearer ${token}` } },
       );
       const raw = res.data?.diagnosis || res.data || {};
+      const actionRaw = String(raw.recommendedAction || "").toLowerCase();
+      const normalizedAction = actionRaw.includes("emerg")
+        ? "emergency"
+        : actionRaw.includes("home") || actionRaw.includes("self")
+        ? "home-care"
+        : "consult-doctor";
       const newRec = {
-        _id: raw._id || Date.now().toString(),
-        symptoms: Array.isArray(raw.symptoms) ? raw.symptoms : [...symptomsList],
-        recommendedAction: raw.recommendedAction || "consult-doctor",
-        aiAnalysis: raw.aiAnalysis || raw.summary || "",
+        _id: String(raw._id || Date.now()),
+        symptoms: Array.isArray(raw.symptoms) && raw.symptoms.length > 0
+          ? raw.symptoms.map(String)
+          : [...symptomsList],
+        recommendedAction: normalizedAction,
+        aiAnalysis: String(raw.aiAnalysis || raw.summary || "Clinical evaluation completed."),
         createdAt: raw.createdAt || new Date().toISOString(),
       };
-      const storageKey = "tc_diag_" + (currentUser?.uid || "guest");
-      const localList = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      const updated = [newRec, ...localList];
+      const storageKey = "tc_diagnosis_history";
+      const existing = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      const updated = [newRec, ...existing];
       localStorage.setItem(storageKey, JSON.stringify(updated));
-      setResult(raw);
+      setResult({ ...raw, diagnosis: raw, recommendedAction: normalizedAction, aiAnalysis: newRec.aiAnalysis });
       setHistory(updated);
-      fetchHistory();
     } catch (err) {
       console.error("Diagnosis error:", err);
       alert(err.response?.data?.message || "Failed to analyze symptoms.");
