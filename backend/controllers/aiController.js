@@ -6,13 +6,13 @@ export const analyzeSymptoms = async (req, res) => {
     const { symptoms, age, gender, medicalHistory } = req.body;
 
     const symptomsArray = Array.isArray(symptoms)
-      ? symptoms.map((s) => String(s).trim()).filter(Boolean)
+      ? symptoms.map(s => String(s).trim()).filter(Boolean)
       : typeof symptoms === "string"
-      ? symptoms
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+        ? symptoms
+            .split(",")
+            .map(s => s.trim())
+            .filter(Boolean)
+        : [];
 
     const symptomsText = symptomsArray.join(", ");
 
