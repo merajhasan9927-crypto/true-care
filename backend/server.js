@@ -18,10 +18,29 @@ dotenv.config();
 const app = express();
 const httpServer = http.createServer(app);
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "https://verdant-daifuku-d04903.netlify.app",
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
 const corsOptions = {
-  origin: true, // Allows localhost:5173 and any deployed Netlify/Vercel frontend URL
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      origin.endsWith(".netlify.app") ||
+      origin.startsWith("http://localhost:")
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error("CORS policy violation"), false);
+  },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 200,
 };
 
 // Initialize Socket.io
@@ -43,7 +62,7 @@ io.on("connection", socket => {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// MongoDB Connection (Supports MONGO_URI or Railway's MONGO_URL)
+// MongoDB Connection
 const MONGO_URI =
   process.env.MONGO_URI ||
   process.env.MONGO_URL ||
