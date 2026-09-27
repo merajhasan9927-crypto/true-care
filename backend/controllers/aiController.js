@@ -224,7 +224,7 @@ export const getDiagnosisHistory = async (req, res) => {
       history = await Diagnosis.find({}).sort({ createdAt: -1 }).limit(20);
     }
 
-    return res.status(200).json(history);
+    return res.status(200).json({ history });
   } catch (error) {
     console.error("Get Diagnosis History Error:", error);
     return res
