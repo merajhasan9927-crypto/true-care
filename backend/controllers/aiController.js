@@ -5,15 +5,14 @@ export const analyzeSymptoms = async (req, res) => {
   try {
     const { symptoms, age, gender, medicalHistory } = req.body;
 
-    // Normalize symptoms whether sent as an Array (["fever", "cough"]) or a String ("fever, cough")
     const symptomsArray = Array.isArray(symptoms)
-      ? symptoms.map(s => String(s).trim()).filter(Boolean)
+      ? symptoms.map((s) => String(s).trim()).filter(Boolean)
       : typeof symptoms === "string"
-        ? symptoms
-            .split(",")
-            .map(s => s.trim())
-            .filter(Boolean)
-        : [];
+      ? symptoms
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
 
     const symptomsText = symptomsArray.join(", ");
 
@@ -56,7 +55,6 @@ Return JSON with this exact structure:
       }
     }
 
-    // Clinical fallback if API key is restricted or model call fails
     if (!aiResult) {
       const lower = symptomsText.toLowerCase();
       const isCritical =
@@ -99,7 +97,6 @@ Return JSON with this exact structure:
       };
     }
 
-    // Save record safely whether schema expects String or [String]
     let savedRecord = null;
     const recordData = {
       userId: req.user?.uid || "guest-user",
