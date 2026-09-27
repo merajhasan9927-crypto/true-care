@@ -1,7 +1,6 @@
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
-import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 
@@ -18,34 +17,13 @@ dotenv.config();
 const app = express();
 const httpServer = http.createServer(app);
 
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "https://verdant-daifuku-d04903.netlify.app",
-  process.env.CLIENT_URL,
-].filter(Boolean);
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (
-      allowedOrigins.includes(origin) ||
-      origin.endsWith(".netlify.app") ||
-      origin.startsWith("http://localhost:")
-    ) {
-      return callback(null, true);
-    }
-    return callback(new Error("CORS policy violation"), false);
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  optionsSuccessStatus: 200,
-};
-
-// Initialize Socket.io
+// 1. Socket.IO Configuration (permits WebSocket connections from any frontend origin)
 const io = new Server(httpServer, {
-  cors: corsOptions,
+  cors: {
+    origin: (origin, callback) => callback(null, true),
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    credentials: true,
+  },
 });
 
 app.set("io", io);
@@ -58,11 +36,31 @@ io.on("connection", socket => {
   });
 });
 
-// Middleware
-app.use(cors(corsOptions));
+// 2. Explicit CORS & Preflight Handling Middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+  );
+
+  // Instantly resolve browser preflight OPTIONS checks
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// 3. Body Parsing Middleware
 app.use(express.json());
 
-// MongoDB Connection
+// 4. MongoDB Database Connection (Supports Railway MONGO_URL and local MONGO_URI)
 const MONGO_URI =
   process.env.MONGO_URI ||
   process.env.MONGO_URL ||
@@ -73,7 +71,7 @@ mongoose
   .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch(err => console.error("❌ MongoDB Connection Error:", err.message));
 
-// API Routes
+// 5. Application Endpoints
 app.use("/api/auth", authRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/diagnosis", aiRoutes);
@@ -83,11 +81,12 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/dispatch", dispatchRoutes);
 app.use("/api/ehr", ehrRoutes);
 
-// Health Check Endpoint
+// Health check endpoint
 app.get("/", (req, res) => {
   res.status(200).json({ status: "TrueCare API & WebSocket Server Active" });
 });
 
+// 6. Server Initialization
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server & Real-Time Socket Engine running on port ${PORT}`);
