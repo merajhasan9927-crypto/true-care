@@ -57,7 +57,20 @@ export default function AiDiagnosis() {
         { symptoms: symptomsList },
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      setResult(res.data);
+      const raw = res.data?.diagnosis || res.data || {};
+      const newRec = {
+        _id: raw._id || Date.now().toString(),
+        symptoms: Array.isArray(raw.symptoms) ? raw.symptoms : [...symptomsList],
+        recommendedAction: raw.recommendedAction || "consult-doctor",
+        aiAnalysis: raw.aiAnalysis || raw.summary || "",
+        createdAt: raw.createdAt || new Date().toISOString(),
+      };
+      const storageKey = "tc_diag_" + (currentUser?.uid || "guest");
+      const localList = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      const updated = [newRec, ...localList];
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      setResult(raw);
+      setHistory(updated);
       fetchHistory();
     } catch (err) {
       console.error("Diagnosis error:", err);
