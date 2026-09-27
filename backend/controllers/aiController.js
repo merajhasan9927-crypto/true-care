@@ -7,13 +7,13 @@ export const analyzeSymptoms = async (req, res) => {
 
     // 1. Normalize symptoms whether sent as an Array (["fever"]) or a String ("fever")
     const symptomsArray = Array.isArray(symptoms)
-      ? symptoms.map((s) => String(s).trim()).filter(Boolean)
+      ? symptoms.map(s => String(s).trim()).filter(Boolean)
       : typeof symptoms === "string"
-      ? symptoms
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+        ? symptoms
+            .split(",")
+            .map(s => s.trim())
+            .filter(Boolean)
+        : [];
 
     const symptomsText = symptomsArray.join(", ");
 
@@ -138,7 +138,10 @@ Return JSON with this exact structure:
     try {
       savedRecord = await Diagnosis.create(recordData);
     } catch (dbErr) {
-      console.warn("Retrying Diagnosis save with string symptoms:", dbErr.message);
+      console.warn(
+        "Retrying Diagnosis save with string symptoms:",
+        dbErr.message,
+      );
       try {
         savedRecord = await Diagnosis.create({
           ...recordData,
