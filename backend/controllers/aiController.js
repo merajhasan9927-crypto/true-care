@@ -34,7 +34,10 @@ export const analyzeSymptoms = async (req, res) => {
     // 3. Call Gemini API (try supported models in order)
     if (process.env.GEMINI_API_KEY) {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const candidateModels = ["gemini-2.0-flash", "gemini-1.5-flash"];
+      const candidateModels = [
+        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite",
+      ];
 
       for (const modelName of candidateModels) {
         try {
