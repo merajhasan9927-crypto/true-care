@@ -5,7 +5,19 @@ export const analyzeSymptoms = async (req, res) => {
   try {
     const { symptoms, age, gender, medicalHistory } = req.body;
 
-    if (!symptoms || !symptoms.trim()) {
+    // Normalize symptoms whether sent as an Array (["fever", "cough"]) or a String ("fever, cough")
+    const symptomsArray = Array.isArray(symptoms)
+      ? symptoms.map(s => String(s).trim()).filter(Boolean)
+      : typeof symptoms === "string"
+        ? symptoms
+            .split(",")
+            .map(s => s.trim())
+            .filter(Boolean)
+        : [];
+
+    const symptomsText = symptomsArray.join(", ");
+
+    if (!symptomsText) {
       return res
         .status(400)
         .json({ error: "Please provide symptoms to analyze." });
@@ -16,10 +28,10 @@ export const analyzeSymptoms = async (req, res) => {
     if (process.env.GEMINI_API_KEY) {
       try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const prompt = `You are a clinical triage AI assistant. Analyze the following patient case and return ONLY valid JSON (no markdown code blocks):
-Patient Symptoms: ${symptoms}
+Patient Symptoms: ${symptomsText}
 Age: ${age || "Not specified"}
 Gender: ${gender || "Not specified"}
 Medical History: ${medicalHistory || "None reported"}
@@ -44,9 +56,9 @@ Return JSON with this exact structure:
       }
     }
 
-    // Clinical fallback if API key is restricted or Vertex-scoped
+    // Clinical fallback if API key is restricted or model call fails
     if (!aiResult) {
-      const lower = symptoms.toLowerCase();
+      const lower = symptomsText.toLowerCase();
       const isCritical =
         lower.includes("chest") ||
         lower.includes("breath") ||
@@ -58,7 +70,7 @@ Return JSON with this exact structure:
         urgencyLevel: isCritical ? "Critical" : "Medium",
         summary: isCritical
           ? "Potentially acute cardiopulmonary or neurological symptoms detected requiring immediate medical evaluation."
-          : `Clinical evaluation recommended for reported symptoms: ${symptoms}.`,
+          : `Clinical evaluation recommended for reported symptoms: ${symptomsText}.`,
         possibleConditions: isCritical
           ? [
               "Acute Coronary Syndrome",
@@ -87,19 +99,33 @@ Return JSON with this exact structure:
       };
     }
 
-    const savedRecord = await Diagnosis.create({
+    // Save record safely whether schema expects String or [String]
+    let savedRecord = null;
+    const recordData = {
       userId: req.user?.uid || "guest-user",
       patientName: req.user?.name || req.user?.email || "Patient",
-      symptoms,
       urgencyLevel: aiResult.urgencyLevel,
       summary: aiResult.summary,
       possibleConditions: aiResult.possibleConditions,
       recommendedSpecialist: aiResult.recommendedSpecialist,
       advice: aiResult.advice,
-    });
+    };
+
+    try {
+      savedRecord = await Diagnosis.create({
+        ...recordData,
+        symptoms: symptomsText,
+      });
+    } catch (dbErr) {
+      savedRecord = await Diagnosis.create({
+        ...recordData,
+        symptoms: symptomsArray,
+      });
+    }
 
     return res.status(200).json({
       ...aiResult,
+      symptoms: savedRecord.symptoms,
       _id: savedRecord._id,
       createdAt: savedRecord.createdAt,
     });
