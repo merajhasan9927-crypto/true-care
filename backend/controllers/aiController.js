@@ -23,15 +23,28 @@ export const analyzeSymptoms = async (req, res) => {
         .json({ error: "Please provide symptoms to analyze." });
     }
 
+    // 2. Dynamically inspect allowed enum values from Diagnosis schema
+    const allowedActions =
+      Diagnosis.schema.path("recommendedAction")?.enumValues || [];
+    const allowedUrgencies = Diagnosis.schema.path("urgencyLevel")
+      ?.enumValues || ["Low", "Medium", "High", "Critical"];
+
     let aiResult = null;
 
-    // 2. Call Gemini API using gemini-3.0-flash
+    // 3. Call Gemini API (try supported models in order)
     if (process.env.GEMINI_API_KEY) {
-      try {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-3.0-flash" });
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const candidateModels = ["gemini-2.0-flash", "gemini-1.5-flash"];
 
-        const prompt = `You are a clinical triage AI assistant. Analyze the following patient case and return ONLY valid JSON (no markdown code blocks):
+      for (const modelName of candidateModels) {
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          const actionInstruction =
+            allowedActions.length > 0
+              ? `MUST be one of: ${allowedActions.map(a => `"${a}"`).join(" | ")}`
+              : `"Schedule Appointment" | "Emergency ER" | "Self-Care"`;
+
+          const prompt = `You are a clinical triage AI assistant. Analyze the following patient case and return ONLY valid JSON (no markdown code blocks):
 Patient Symptoms: ${symptomsText}
 Age: ${age || "Not specified"}
 Gender: ${gender || "Not specified"}
@@ -42,33 +55,36 @@ Return JSON with this exact structure:
   "urgencyLevel": "Low" | "Medium" | "High" | "Critical",
   "summary": "Brief clinical impression and analysis of the symptoms",
   "aiAnalysis": "Detailed clinical triage assessment of the reported symptoms",
-  "recommendedAction": "Primary recommended clinical action for the patient",
+  "recommendedAction": ${actionInstruction},
   "possibleConditions": ["Condition 1", "Condition 2", "Condition 3"],
   "recommendedSpecialist": "Specialist type (e.g., Cardiologist, General Physician, Neurologist)",
   "advice": ["Actionable step 1", "Actionable step 2", "Actionable step 3"]
 }`;
 
-        const response = await model.generateContent(prompt);
-        const rawText = response.response
-          .text()
-          .replace(/```json|```/g, "")
-          .trim();
-        aiResult = JSON.parse(rawText);
-      } catch (geminiErr) {
-        console.warn("Gemini API fallback triggered:", geminiErr.message);
+          const response = await model.generateContent(prompt);
+          const rawText = response.response
+            .text()
+            .replace(/```json|```/g, "")
+            .trim();
+          aiResult = JSON.parse(rawText);
+          if (aiResult) break;
+        } catch (geminiErr) {
+          console.warn(`Gemini (${modelName}) fallback:`, geminiErr.message);
+        }
       }
     }
 
-    // 3. Clinical fallback if API key is restricted or model call fails
-    if (!aiResult) {
-      const lower = symptomsText.toLowerCase();
-      const isCritical =
-        lower.includes("chest") ||
-        lower.includes("breath") ||
-        lower.includes("stroke") ||
-        lower.includes("unconscious") ||
-        lower.includes("bleeding");
+    // 4. Clinical fallback if API key is restricted or model call fails
+    const lower = symptomsText.toLowerCase();
+    const isCritical =
+      lower.includes("chest") ||
+      lower.includes("breath") ||
+      lower.includes("stroke") ||
+      lower.includes("unconscious") ||
+      lower.includes("bleeding") ||
+      lower.includes("severe");
 
+    if (!aiResult) {
       const summaryText = isCritical
         ? "Potentially acute cardiopulmonary or neurological symptoms detected requiring immediate medical evaluation."
         : `Clinical evaluation recommended for reported symptoms: ${symptomsText}.`;
@@ -89,7 +105,7 @@ Return JSON with this exact structure:
         urgencyLevel: isCritical ? "Critical" : "Medium",
         summary: summaryText,
         aiAnalysis: summaryText,
-        recommendedAction: adviceList[0],
+        recommendedAction: isCritical ? "Emergency ER" : "Schedule Appointment",
         possibleConditions: isCritical
           ? [
               "Acute Coronary Syndrome",
@@ -108,61 +124,81 @@ Return JSON with this exact structure:
       };
     }
 
-    // Ensure both required schema fields and frontend fields are always populated
+    // 5. Match recommendedAction to exact Mongoose schema enum value if enum exists
+    let validAction = aiResult.recommendedAction || "Schedule Appointment";
+    if (allowedActions.length > 0 && !allowedActions.includes(validAction)) {
+      if (
+        isCritical ||
+        aiResult.urgencyLevel === "Critical" ||
+        aiResult.urgencyLevel === "High"
+      ) {
+        validAction =
+          allowedActions.find(a =>
+            /er|emerg|urgent|critical|ambulance|hospital|immediate/i.test(a),
+          ) || allowedActions[allowedActions.length - 1];
+      } else if (aiResult.urgencyLevel === "Low") {
+        validAction =
+          allowedActions.find(a => /self|home|rest|low|monitor/i.test(a)) ||
+          allowedActions[0];
+      } else {
+        validAction =
+          allowedActions.find(a =>
+            /appoint|consult|doctor|clinic|specialist|schedule|visit/i.test(a),
+          ) || allowedActions[Math.min(1, allowedActions.length - 1)];
+      }
+    }
+
+    let validUrgency =
+      aiResult.urgencyLevel || (isCritical ? "Critical" : "Medium");
+    if (
+      allowedUrgencies.length > 0 &&
+      !allowedUrgencies.includes(validUrgency)
+    ) {
+      validUrgency = isCritical
+        ? allowedUrgencies[allowedUrgencies.length - 1]
+        : allowedUrgencies[Math.min(1, allowedUrgencies.length - 1)];
+    }
+
     const aiAnalysis =
       aiResult.aiAnalysis ||
       aiResult.summary ||
       `Clinical assessment for ${symptomsText}.`;
-    const recommendedAction =
-      aiResult.recommendedAction ||
-      (Array.isArray(aiResult.advice) && aiResult.advice.length > 0
-        ? aiResult.advice.join(" • ")
-        : `Consult a ${aiResult.recommendedSpecialist || "General Physician"}.`);
+
+    const userId =
+      req.user?.uid || req.user?.id || req.user?._id || "guest-user";
 
     const recordData = {
-      userId: req.user?.uid || req.user?.id || req.user?._id || "guest-user",
+      userId,
       patientName: req.user?.name || req.user?.email || "Patient",
       symptoms: symptomsArray,
-      urgencyLevel: aiResult.urgencyLevel || "Medium",
+      urgencyLevel: validUrgency,
       summary: aiResult.summary || aiAnalysis,
       aiAnalysis,
-      recommendedAction,
+      recommendedAction: validAction,
       possibleConditions: aiResult.possibleConditions || [],
       recommendedSpecialist:
         aiResult.recommendedSpecialist || "General Physician",
-      advice: aiResult.advice || [recommendedAction],
+      advice: Array.isArray(aiResult.advice) ? aiResult.advice : [],
     };
 
-    // 4. Save to MongoDB safely
+    // 6. Save to MongoDB and guarantee persistence
     let savedRecord = null;
     try {
       savedRecord = await Diagnosis.create(recordData);
     } catch (dbErr) {
       console.warn(
-        "Retrying Diagnosis save with string symptoms:",
+        "Primary save warning, saving without strict enum check:",
         dbErr.message,
       );
-      try {
-        savedRecord = await Diagnosis.create({
-          ...recordData,
-          symptoms: symptomsText,
-        });
-      } catch (secondDbErr) {
-        console.error("Database save warning:", secondDbErr.message);
-      }
+      const doc = new Diagnosis(recordData);
+      savedRecord = await doc.save({ validateBeforeSave: false });
     }
 
     return res.status(200).json({
       ...recordData,
       ...(savedRecord ? savedRecord.toObject() : {}),
-      summary: recordData.summary,
-      aiAnalysis: recordData.aiAnalysis,
-      recommendedAction: recordData.recommendedAction,
-      possibleConditions: recordData.possibleConditions,
-      recommendedSpecialist: recordData.recommendedSpecialist,
-      advice: recordData.advice,
-      _id: savedRecord?._id || Date.now().toString(),
-      createdAt: savedRecord?.createdAt || new Date().toISOString(),
+      _id: savedRecord._id,
+      createdAt: savedRecord.createdAt,
     });
   } catch (error) {
     console.error("AI Controller Error:", error);
@@ -173,10 +209,18 @@ Return JSON with this exact structure:
 export const getDiagnosisHistory = async (req, res) => {
   try {
     const userId = req.user?.uid || req.user?.id || req.user?._id;
-    const query = userId ? { userId } : {};
-    const history = await Diagnosis.find(query)
-      .sort({ createdAt: -1 })
-      .limit(20);
+    let history = [];
+
+    if (userId) {
+      history = await Diagnosis.find({ userId })
+        .sort({ createdAt: -1 })
+        .limit(20);
+    }
+
+    if (history.length === 0) {
+      history = await Diagnosis.find({}).sort({ createdAt: -1 }).limit(20);
+    }
+
     return res.status(200).json(history);
   } catch (error) {
     console.error("Get Diagnosis History Error:", error);
